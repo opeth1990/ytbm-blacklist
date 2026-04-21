@@ -1,17 +1,14 @@
 name: Sync Blacklist
-
 on:
   schedule:
     - cron: '0 18 * * *'
   workflow_dispatch:
-
 jobs:
   sync:
     runs-on: ubuntu-latest
     steps:
       - name: 저장소 체크아웃
         uses: actions/checkout@v4
-
       - name: Supabase에서 데이터 가져오기
         env:
           SUPA_URL: ${{ secrets.SUPABASE_URL }}
@@ -20,18 +17,16 @@ jobs:
           curl -s -H "apikey: ${SUPA_KEY}" -H "Authorization: Bearer ${SUPA_KEY}" "${SUPA_URL}/rest/v1/reputation?order=block_count.desc&limit=5000" -o raw_data.json
           echo "파일크기: $(wc -c < raw_data.json)"
           cat raw_data.json | head -c 200
-
       - name: blacklist.json 생성
         run: |
           python3 -c "
           import json, datetime
           raw = json.load(open('raw_data.json'))
           filtered = [x for x in raw if x.get('block_count', 0) >= 1]
-          bl = {'version': 1, 'updated_at': datetime.datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%SZ'), 'count': len(filtered), 'reputation': [{'channel_handle': x['channel_handle'], 'block_count': x['block_count']} for x in filtered]}
+          bl = {'version': 1, 'updated_at': datetime.datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%SZ'), 'count': len(filtered), 'reputation': [{'channel_handle': x['channel_handle'], 'block_count': x['block_count'], 'reason_counts': x.get('reason_counts', {})} for x in filtered]}
           json.dump(bl, open('blacklist.json','w'), ensure_ascii=False, separators=(',',':'))
           print(f'완료: {len(filtered)}개')
           "
-
       - name: 커밋 & 푸시
         run: |
           git config user.name "github-actions[bot]"

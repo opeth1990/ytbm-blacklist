@@ -1,0 +1,55 @@
+name: Sync Blacklist
+
+on:
+  schedule:
+    - cron: '0 18 * * *'  # UTC 18:00 = KST 03:00 매일
+  workflow_dispatch:
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 저장소 체크아웃
+        uses: actions/checkout@v4
+
+      - name: Supabase에서 데이터 가져오기
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+        run: |
+          curl -s \
+            -H "apikey: $SUPABASE_KEY" \
+            -H "Authorization: Bearer $SUPABASE_KEY" \
+            "$SUPABASE_URL/rest/v1/reputation?order=block_count.desc&limit=5000" \
+            -o raw_data.json
+          echo "수신 완료: $(cat raw_data.json | python3 -c 'import json,sys; print(len(json.load(sys.stdin)))')개"
+
+      - name: blacklist.json 생성
+        run: |
+          python3 << 'PYTHON'
+          import json, datetime
+          with open('raw_data.json', 'r') as f:
+              raw = json.load(f)
+          filtered = [item for item in raw if item.get('block_count', 0) >= 10]
+          blacklist = {
+              "version": 1,
+              "updated_at": datetime.datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%SZ'),
+              "count": len(filtered),
+              "reputation": [
+                  {"channel_handle": item["channel_handle"], "block_count": item["block_count"]}
+                  for item in filtered
+              ]
+          }
+          with open('blacklist.json', 'w', encoding='utf-8') as f:
+              json.dump(blacklist, f, ensure_ascii=False, separators=(',', ':'))
+          print(f"blacklist.json 생성 완료: {len(filtered)}개")
+          PYTHON
+
+      - name: 커밋 & 푸시
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add blacklist.json
+          git diff --staged --quiet && echo "변경사항 없음" || \
+          git commit -m "🔄 블랙리스트 업데이트 $(date -u '+%Y-%m-%d %H:%M') UTC"
+          git push

@@ -12,25 +12,18 @@ jobs:
       - name: 저장소 체크아웃
         uses: actions/checkout@v4
 
-      - name: Secret 확인
-        run: |
-          echo "URL 길이: ${#SUPA_URL}"
-          echo "KEY 길이: ${#SUPA_KEY}"
-          echo "URL 앞부분: ${SUPA_URL:0:10}"
-        env:
-          SUPA_URL: ${{ secrets.SUPABASE_URL }}
-          SUPA_KEY: ${{ secrets.SUPABASE_KEY }}
-
       - name: Supabase에서 데이터 가져오기
         env:
           SUPA_URL: ${{ secrets.SUPABASE_URL }}
           SUPA_KEY: ${{ secrets.SUPABASE_KEY }}
         run: |
-          curl -v \
+          curl -s \
             -H "apikey: ${SUPA_KEY}" \
             -H "Authorization: Bearer ${SUPA_KEY}" \
             "${SUPA_URL}/rest/v1/reputation?order=block_count.desc&limit=5000" \
-            -o raw_data.json 2>&1 | head -30
+            -o raw_data.json
+          echo "파일 크기: $(wc -c < raw_data.json) bytes"
+          echo "내용 앞부분: $(head -c 100 raw_data.json)"
 
       - name: blacklist.json 생성
         run: |

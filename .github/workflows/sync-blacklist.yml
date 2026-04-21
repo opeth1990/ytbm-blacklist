@@ -26,7 +26,7 @@ jobs:
           python3 -c "
           import json, datetime
           raw = json.load(open('raw_data.json'))
-          filtered = [x for x in raw if x.get('block_count', 0) >= 3]
+          filtered = [x for x in raw if x.get('block_count', 0) >= 1]
           bl = {'version': 1, 'updated_at': datetime.datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%SZ'), 'count': len(filtered), 'reputation': [{'channel_handle': x['channel_handle'], 'block_count': x['block_count']} for x in filtered]}
           json.dump(bl, open('blacklist.json','w'), ensure_ascii=False, separators=(',',':'))
           print(f'완료: {len(filtered)}개')

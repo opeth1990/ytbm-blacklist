@@ -17,40 +17,25 @@ jobs:
           SUPA_URL: ${{ secrets.SUPABASE_URL }}
           SUPA_KEY: ${{ secrets.SUPABASE_KEY }}
         run: |
-          curl -s \
-            -H "apikey: ${SUPA_KEY}" \
-            -H "Authorization: Bearer ${SUPA_KEY}" \
-            "${SUPA_URL}/rest/v1/reputation?order=block_count.desc&limit=5000" \
-            -o raw_data.json
-          echo "파일 크기: $(wc -c < raw_data.json) bytes"
-          echo "내용 앞부분: $(head -c 100 raw_data.json)"
+          curl -s -H "apikey: ${SUPA_KEY}" -H "Authorization: Bearer ${SUPA_KEY}" "${SUPA_URL}/rest/v1/reputation?order=block_count.desc&limit=5000" -o raw_data.json
+          echo "파일크기: $(wc -c < raw_data.json)"
+          cat raw_data.json | head -c 200
 
       - name: blacklist.json 생성
         run: |
-          python3 << 'PYTHON'
+          python3 -c "
           import json, datetime
-          with open('raw_data.json', 'r') as f:
-              raw = json.load(f)
-          filtered = [item for item in raw if item.get('block_count', 0) >= 10]
-          blacklist = {
-              "version": 1,
-              "updated_at": datetime.datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%SZ'),
-              "count": len(filtered),
-              "reputation": [
-                  {"channel_handle": item["channel_handle"], "block_count": item["block_count"]}
-                  for item in filtered
-              ]
-          }
-          with open('blacklist.json', 'w', encoding='utf-8') as f:
-              json.dump(blacklist, f, ensure_ascii=False, separators=(',', ':'))
-          print(f"생성 완료: {len(filtered)}개")
-          PYTHON
+          raw = json.load(open('raw_data.json'))
+          filtered = [x for x in raw if x.get('block_count', 0) >= 10]
+          bl = {'version': 1, 'updated_at': datetime.datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%SZ'), 'count': len(filtered), 'reputation': [{'channel_handle': x['channel_handle'], 'block_count': x['block_count']} for x in filtered]}
+          json.dump(bl, open('blacklist.json','w'), ensure_ascii=False, separators=(',',':'))
+          print(f'완료: {len(filtered)}개')
+          "
 
       - name: 커밋 & 푸시
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add blacklist.json
-          git diff --staged --quiet && echo "변경사항 없음" || \
-          git commit -m "블랙리스트 업데이트 $(date -u '+%Y-%m-%d %H:%M') UTC"
+          git diff --staged --quiet && echo "변경없음" || git commit -m "블랙리스트 업데이트 $(date -u '+%Y-%m-%d %H:%M') UTC"
           git push
